@@ -1,4 +1,5 @@
 <!DOCTYPE html>
+
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -50,8 +51,8 @@
 </style>
 
 <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
-<script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
 
+<script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
 
 <script>
 // On-screen error display so we don't need dev tools on mobile.
@@ -84,6 +85,7 @@ Loaded: React=${typeof React !== 'undefined'}, ReactDOM=${typeof ReactDOM !== 'u
   }, 8000);
 })();
 </script>
+
 </head>
 <body>
 <div id="root"><div class="preload">LOADING…</div></div>
@@ -313,6 +315,19 @@ function formatRelativeDay(dateKey) {
 // "27" — short day-of-month for chart x-axis ticks.
 function shortDayLabel(dateKey) {
   return String(parseInt(dateKey.split("-")[2], 10));
+}
+
+// Cached weekday formatter (Mon, Tue, …) using Melbourne local time.
+const weekdayFmt = new Intl.DateTimeFormat("en-AU", {
+  timeZone: TZ,
+  weekday: "short"
+});
+function shortWeekdayLabel(dateKey) {
+  const [y, m, d] = dateKey.split("-").map(Number);
+  // Use noon UTC so the date doesn't slip across the IDL when formatted
+  // in Melbourne — matches the convention used elsewhere.
+  const dt = new Date(Date.UTC(y, m - 1, d, 12, 0, 0));
+  return weekdayFmt.format(dt);
 }
 
 // Day key shifted by `delta` days from `dateKey`.
@@ -1953,7 +1968,9 @@ function HistoryChart({
   dataKey,
   unit,
   tickInterval = 0,
-  height = 150
+  height = 150,
+  primaryTarget = null,
+  secondaryTarget = null
 }) {
   const [activeIdx, setActiveIdx] = useState(null);
   const hasAny = data.some(d => (d[dataKey] || 0) > 0);
@@ -1972,10 +1989,19 @@ function HistoryChart({
     padB = 22;
   const innerW = W - padL - padR;
   const innerH = H - padT - padB;
-  const niceMax = niceCeil(Math.max(...data.map(d => d[dataKey] || 0)));
+  // Include target values when computing the y-axis ceiling so the
+  // reference lines never get clipped above the chart frame.
+  const dataMax = Math.max(...data.map(d => d[dataKey] || 0));
+  const ceilingCandidates = [dataMax];
+  if (primaryTarget != null) ceilingCandidates.push(primaryTarget);
+  if (secondaryTarget != null) ceilingCandidates.push(secondaryTarget);
+  const niceMax = niceCeil(Math.max(...ceilingCandidates));
   const slotW = innerW / data.length;
   const barW = Math.max(2, slotW * 0.7);
   const barOffset = (slotW - barW) / 2;
+
+  // Helper: convert a target value into a y coordinate.
+  const targetY = v => padT + innerH - v / niceMax * innerH;
   return /*#__PURE__*/React.createElement("div", {
     className: "chart-wrap",
     style: {
@@ -2015,7 +2041,44 @@ function HistoryChart({
       fill: "#C9542A",
       pointerEvents: "none"
     }));
-  }), data.map((d, i) => {
+  }), primaryTarget != null && /*#__PURE__*/React.createElement("g", {
+    pointerEvents: "none"
+  }, /*#__PURE__*/React.createElement("line", {
+    x1: padL,
+    y1: targetY(primaryTarget),
+    x2: W - padR,
+    y2: targetY(primaryTarget),
+    stroke: "#1a1a1a",
+    strokeWidth: "1.3",
+    vectorEffect: "non-scaling-stroke"
+  }), /*#__PURE__*/React.createElement("text", {
+    x: W - padR - 2,
+    y: targetY(primaryTarget) - 3,
+    textAnchor: "end",
+    fontSize: "9",
+    fontWeight: "700",
+    fontFamily: "JetBrains Mono",
+    fill: "#1a1a1a"
+  }, primaryTarget.toLocaleString())), secondaryTarget != null && /*#__PURE__*/React.createElement("g", {
+    pointerEvents: "none"
+  }, /*#__PURE__*/React.createElement("line", {
+    x1: padL,
+    y1: targetY(secondaryTarget),
+    x2: W - padR,
+    y2: targetY(secondaryTarget),
+    stroke: "#1a1a1a",
+    strokeWidth: "1.3",
+    strokeDasharray: "3 3",
+    vectorEffect: "non-scaling-stroke"
+  }), /*#__PURE__*/React.createElement("text", {
+    x: W - padR - 2,
+    y: targetY(secondaryTarget) - 3,
+    textAnchor: "end",
+    fontSize: "9",
+    fontWeight: "700",
+    fontFamily: "JetBrains Mono",
+    fill: "#1a1a1a"
+  }, secondaryTarget.toLocaleString())), data.map((d, i) => {
     if (tickInterval > 0 && i % (tickInterval + 1) !== 0) return null;
     const x = padL + i * slotW + slotW / 2;
     return /*#__PURE__*/React.createElement("text", {
@@ -2702,7 +2765,10 @@ function RangeView({
         const burn = d.cardio.reduce((a, c) => a + (c.kcal_burned || 0), 0);
         return {
           date: d.date,
-          label: shortDayLabel(d.date),
+          // Week view = weekday names (Mon/Tue/…); month view = day-of-month
+          // numbers because weekday names would repeat 4-5× in 30 days and
+          // become unreadable.
+          label: days <= 7 ? shortWeekdayLabel(d.date) : shortDayLabel(d.date),
           kcal: totals.kcal,
           // Macro-derived calories. Atwater factors: P 4, C 4, F 9.
           // Kept separate from `kcal` because logged kcal often won't
@@ -2731,6 +2797,7 @@ function RangeView({
   const totalKcal = chartData.reduce((a, d) => a + d.kcal, 0);
   const avgKcal = Math.round(totalKcal / days);
   const totalBurn = chartData.reduce((a, d) => a + d.burn, 0);
+  const avgBurn = Math.round(totalBurn / days);
   return /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement(Panel, {
     title: `Last ${days} Days`
   }, /*#__PURE__*/React.createElement("div", {
@@ -2751,7 +2818,9 @@ function RangeView({
     data: chartData,
     dataKey: "kcal",
     unit: "kcal",
-    tickInterval: tickInterval
+    tickInterval: tickInterval,
+    primaryTarget: MAINTENANCE_KCAL,
+    secondaryTarget: avgBurn > 0 ? MAINTENANCE_KCAL + avgBurn : null
   })), /*#__PURE__*/React.createElement(Panel, {
     title: "Macros (kcal)"
   }, /*#__PURE__*/React.createElement(MacrosStackedChart, {
@@ -4405,5 +4474,6 @@ const _root = ReactDOM.createRoot(document.getElementById("root"));
 _root.render(/*#__PURE__*/React.createElement(App, null));
 
 </script>
+
 </body>
 </html>
