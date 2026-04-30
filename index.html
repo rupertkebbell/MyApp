@@ -2240,6 +2240,12 @@ function DayView({
     totals: totals,
     cardioBurn: cardioBurn
   })), hasMeals && /*#__PURE__*/React.createElement(Panel, {
+    title: "Goals"
+  }, /*#__PURE__*/React.createElement(HomepageCharts, {
+    totalKcal: totals.kcal,
+    totalProtein: totals.protein_g,
+    cardioBurn: cardioBurn
+  })), hasMeals && /*#__PURE__*/React.createElement(Panel, {
     title: `Meals · ${data.meals.length}`
   }, [...data.meals].sort((a, b) => b.eaten_at.localeCompare(a.eaten_at)).map(m => /*#__PURE__*/React.createElement("button", {
     key: m.id,
@@ -2249,12 +2255,14 @@ function DayView({
     meal: m
   })))), hasStrength && /*#__PURE__*/React.createElement(Panel, {
     title: `Strength · ${data.strength.length} sets`
-  }, Object.entries(strengthByExercise).map(([name, sets]) => /*#__PURE__*/React.createElement(StrengthGroupEditable, {
+  }, Object.entries(strengthByExercise).map(([name, sets]) => /*#__PURE__*/React.createElement("div", {
     key: name,
-    name: name,
-    sets: sets,
-    onDeleteSet: deleteStrengthSet
-  }))), hasCardio && /*#__PURE__*/React.createElement(Panel, {
+    className: "row"
+  }, /*#__PURE__*/React.createElement("span", {
+    className: "row-key"
+  }, name), /*#__PURE__*/React.createElement("span", {
+    className: "row-val mono"
+  }, sets.length, " ", sets.length === 1 ? "set" : "sets")))), hasCardio && /*#__PURE__*/React.createElement(Panel, {
     title: `Cardio · ${cardioBurn.toLocaleString()} kcal`
   }, [...data.cardio].sort((a, b) => b.started_at.localeCompare(a.started_at)).map(s => {
     var _CARDIO_TYPES$find2;
@@ -2288,20 +2296,9 @@ function DayView({
     className: "row-key"
   }, "Evening"), /*#__PURE__*/React.createElement("span", {
     className: "row-val mono"
-  }, eDoneCount, "/", eItems.length))), data.journal.length > 0 && /*#__PURE__*/React.createElement(Panel, {
-    title: `Notes · ${data.journal.length} ${data.journal.length === 1 ? "entry" : "entries"}`
-  }, [...data.journal].sort((a, b) => b.created_at.localeCompare(a.created_at)).map(entry => /*#__PURE__*/React.createElement("div", {
-    key: entry.id,
-    className: "entry-row"
-  }, /*#__PURE__*/React.createElement("div", {
-    className: "entry-head"
-  }, /*#__PURE__*/React.createElement("span", {
-    className: "entry-heading"
-  }, entry.prompt || "Quick note"), /*#__PURE__*/React.createElement("span", {
-    className: "entry-time mono"
-  }, formatTime(entry.created_at))), /*#__PURE__*/React.createElement("div", {
-    className: "entry-body"
-  }, entry.body)))), !hasMeals && !hasStrength && !hasCardio && /*#__PURE__*/React.createElement(Panel, {
+  }, eDoneCount, "/", eItems.length))), data.journal.length > 0 && /*#__PURE__*/React.createElement(CollapsibleNotesPanel, {
+    entries: data.journal
+  }), !hasMeals && !hasStrength && !hasCardio && /*#__PURE__*/React.createElement(Panel, {
     title: "Day Log"
   }, /*#__PURE__*/React.createElement("div", {
     className: "empty"
@@ -2317,6 +2314,134 @@ function DayView({
 }
 
 // Compact totals — used inside the Home panel, not as a sticky bar.
+// ============================================================
+// Day-view headline charts — single bar with target line(s)
+// overlaid. Used for calories (2 lines: maintenance + maint+burn)
+// and protein (1 line: target).
+// ============================================================
+const MAINTENANCE_KCAL = 2000;
+const PROTEIN_TARGET_G = 120;
+function TargetBarChart({
+  title,
+  value,
+  unit,
+  primaryTarget,
+  secondaryTarget
+}) {
+  // Y-axis ranges from 0 to whichever is larger: the value or the highest target,
+  // padded by 15% so the top line/bar isn't pinned to the chart edge.
+  const maxRef = Math.max(value, primaryTarget, secondaryTarget || 0);
+  const max = Math.max(1, maxRef * 1.15);
+
+  // Geometry — designed for a ~150px tall chart, side-by-side on mobile.
+  const W = 200;
+  const H = 170;
+  const padT = 14;
+  const padB = 14;
+  const barX = 70;
+  const barW = 60;
+  const innerH = H - padT - padB;
+  const barH = value / max * innerH;
+  const barY = padT + innerH - barH;
+  const primaryY = padT + innerH - primaryTarget / max * innerH;
+  const secondaryY = secondaryTarget != null ? padT + innerH - secondaryTarget / max * innerH : null;
+  const formatVal = n => `${n.toLocaleString()}${unit ? unit : ""}`;
+  return /*#__PURE__*/React.createElement("div", {
+    className: "target-chart"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "target-chart-title"
+  }, title), /*#__PURE__*/React.createElement("svg", {
+    viewBox: `0 0 ${W} ${H}`,
+    preserveAspectRatio: "xMidYMid meet",
+    width: "100%",
+    height: H,
+    style: {
+      display: "block",
+      overflow: "visible"
+    }
+  }, /*#__PURE__*/React.createElement("rect", {
+    x: barX,
+    y: barY,
+    width: barW,
+    height: barH,
+    fill: "#C9542A"
+  }), barH > 22 && /*#__PURE__*/React.createElement("text", {
+    x: barX + barW / 2,
+    y: barY + 14,
+    textAnchor: "middle",
+    fontSize: "11",
+    fontWeight: "700",
+    fontFamily: "JetBrains Mono",
+    fill: "white"
+  }, formatVal(value)), /*#__PURE__*/React.createElement("line", {
+    x1: barX - 16,
+    y1: padT + innerH,
+    x2: barX + barW + 16,
+    y2: padT + innerH,
+    stroke: "#1a1a1a",
+    strokeWidth: "1",
+    vectorEffect: "non-scaling-stroke"
+  }), /*#__PURE__*/React.createElement("line", {
+    x1: "6",
+    y1: primaryY,
+    x2: W - 36,
+    y2: primaryY,
+    stroke: "#1a1a1a",
+    strokeWidth: "1.5",
+    vectorEffect: "non-scaling-stroke"
+  }), /*#__PURE__*/React.createElement("text", {
+    x: W - 32,
+    y: primaryY + 3,
+    fontSize: "9",
+    fontWeight: "700",
+    fontFamily: "JetBrains Mono",
+    fill: "#1a1a1a"
+  }, formatVal(primaryTarget)), secondaryTarget != null && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("line", {
+    x1: "6",
+    y1: secondaryY,
+    x2: W - 36,
+    y2: secondaryY,
+    stroke: "#1a1a1a",
+    strokeWidth: "1.5",
+    strokeDasharray: "3 3",
+    vectorEffect: "non-scaling-stroke"
+  }), /*#__PURE__*/React.createElement("text", {
+    x: W - 32,
+    y: secondaryY + 3,
+    fontSize: "9",
+    fontWeight: "700",
+    fontFamily: "JetBrains Mono",
+    fill: "#1a1a1a"
+  }, formatVal(secondaryTarget))), barH <= 22 && value > 0 && /*#__PURE__*/React.createElement("text", {
+    x: barX + barW / 2,
+    y: padT + innerH - 4,
+    textAnchor: "middle",
+    fontSize: "11",
+    fontWeight: "700",
+    fontFamily: "JetBrains Mono",
+    fill: "#1a1a1a"
+  }, formatVal(value))));
+}
+function HomepageCharts({
+  totalKcal,
+  totalProtein,
+  cardioBurn
+}) {
+  return /*#__PURE__*/React.createElement("div", {
+    className: "homepage-charts"
+  }, /*#__PURE__*/React.createElement(TargetBarChart, {
+    title: "Calories",
+    value: totalKcal,
+    unit: "",
+    primaryTarget: MAINTENANCE_KCAL,
+    secondaryTarget: MAINTENANCE_KCAL + cardioBurn
+  }), /*#__PURE__*/React.createElement(TargetBarChart, {
+    title: "Protein",
+    value: totalProtein,
+    unit: "g",
+    primaryTarget: PROTEIN_TARGET_G
+  }));
+}
 function TotalsCompact({
   totals,
   cardioBurn
@@ -2337,6 +2462,41 @@ function TotalsCompact({
 }
 
 // Strength group with per-set delete.
+// Collapsible Notes panel — entries hidden by default; tap header to expand.
+// Privacy stance: even on the day view, journal contents shouldn't be visible
+// at a glance. Header shows entry count; tap to reveal.
+function CollapsibleNotesPanel({
+  entries
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const count = entries.length;
+  const title = `Notes · ${count} ${count === 1 ? "entry" : "entries"}`;
+  return /*#__PURE__*/React.createElement("div", {
+    className: "panel"
+  }, /*#__PURE__*/React.createElement("button", {
+    className: "panel-title panel-title-button",
+    onClick: () => setExpanded(!expanded),
+    "aria-expanded": expanded
+  }, /*#__PURE__*/React.createElement("span", null, title), /*#__PURE__*/React.createElement("span", {
+    className: `collapse-chev ${expanded ? "open" : ""}`
+  }, /*#__PURE__*/React.createElement(ChevronRight, {
+    size: 14,
+    strokeWidth: 2
+  }))), expanded && /*#__PURE__*/React.createElement("div", {
+    className: "panel-body"
+  }, [...entries].sort((a, b) => b.created_at.localeCompare(a.created_at)).map(entry => /*#__PURE__*/React.createElement("div", {
+    key: entry.id,
+    className: "entry-row"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "entry-head"
+  }, /*#__PURE__*/React.createElement("span", {
+    className: "entry-heading"
+  }, entry.prompt || "Quick note"), /*#__PURE__*/React.createElement("span", {
+    className: "entry-time mono"
+  }, formatTime(entry.created_at))), /*#__PURE__*/React.createElement("div", {
+    className: "entry-body"
+  }, entry.body)))));
+}
 function StrengthGroupEditable({
   name,
   sets,
@@ -3089,6 +3249,49 @@ function App() {
           align-items: center;
         }
         .panel-body { padding: 12px; }
+
+        /* Collapsible panel header (used by Notes section). Reuses
+           .panel-title visual styling via .panel-title-button. */
+        .panel-title-button {
+          width: 100%;
+          font-family: inherit;
+          color: inherit;
+          cursor: pointer;
+          /* Override button browser defaults so it matches .panel-title. */
+          border: none;
+          border-bottom: 1px solid var(--ink);
+          /* The rest is inherited from .panel-title. */
+        }
+        .panel-title-button:hover {
+          background: var(--accent-deep, #a6431f);
+        }
+        .collapse-chev {
+          display: inline-flex;
+          align-items: center;
+          transition: transform 180ms ease;
+        }
+        .collapse-chev.open {
+          transform: rotate(90deg);
+        }
+
+        /* Homepage charts — side by side, narrow on mobile. */
+        .homepage-charts {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 14px;
+        }
+        .target-chart {
+          display: flex;
+          flex-direction: column;
+        }
+        .target-chart-title {
+          font-size: 10px;
+          letter-spacing: 0.18em;
+          text-transform: uppercase;
+          font-weight: 700;
+          color: var(--ink-soft);
+          margin-bottom: 6px;
+        }
 
         /* Eyebrow util */
         .eyebrow {
