@@ -1,5 +1,4 @@
 <!DOCTYPE html>
-
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -51,8 +50,8 @@
 </style>
 
 <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
-
 <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+
 
 <script>
 // On-screen error display so we don't need dev tools on mobile.
@@ -85,7 +84,6 @@ Loaded: React=${typeof React !== 'undefined'}, ReactDOM=${typeof ReactDOM !== 'u
   }, 8000);
 })();
 </script>
-
 </head>
 <body>
 <div id="root"><div class="preload">LOADING…</div></div>
@@ -484,7 +482,71 @@ function genId() {
 // ============================================================
 // Exercise constants
 // ============================================================
-const EXERCISES = ["Squat", "Bench press", "Barbell row", "Pull-ups", "Deadlift", "Overhead press", "Machine crunches", "Hanging leg raises", "Lat pulldown", "Shoulder press", "Leg extensions", "Lat raises"];
+// Exercise categories. The colour values are reused below in CSS via
+// inline style on the dot/strip; keeping them defined in JS means the
+// category labels can be referenced from React render code as well.
+const EXERCISE_CATEGORIES = {
+  push: {
+    label: "Push",
+    color: "#C9542A"
+  },
+  pull: {
+    label: "Pull",
+    color: "#5C4A33"
+  },
+  legs: {
+    label: "Legs",
+    color: "#6B7548"
+  },
+  core: {
+    label: "Core",
+    color: "#B5832A"
+  }
+};
+const EXERCISES = [{
+  name: "Squat",
+  category: "legs"
+}, {
+  name: "Bench press",
+  category: "push"
+}, {
+  name: "Barbell row",
+  category: "pull"
+}, {
+  name: "Pull-ups",
+  category: "pull"
+}, {
+  name: "Deadlift",
+  category: "legs"
+}, {
+  name: "Overhead press",
+  category: "push"
+}, {
+  name: "Machine crunches",
+  category: "core"
+}, {
+  name: "Hanging leg raises",
+  category: "core"
+}, {
+  name: "Lat pulldown",
+  category: "pull"
+}, {
+  name: "Shoulder press",
+  category: "push"
+}, {
+  name: "Leg extensions",
+  category: "legs"
+}, {
+  name: "Lat raises",
+  category: "push"
+}];
+
+// Map name → category for fast lookup when rendering existing logged sets
+// (which only store the exercise name, not the category).
+const EXERCISE_CATEGORY_BY_NAME = Object.fromEntries(EXERCISES.map(e => [e.name, e.category]));
+function categoryFor(exerciseName) {
+  return EXERCISE_CATEGORY_BY_NAME[exerciseName] || null;
+}
 const CARDIO_TYPES = [{
   id: "jog",
   label: "Jog"
@@ -1520,15 +1582,31 @@ function StrengthMode({
     title: "Pick an exercise"
   }, /*#__PURE__*/React.createElement("div", {
     className: "exercise-grid"
-  }, EXERCISES.map(name => {
+  }, EXERCISES.map(({
+    name,
+    category
+  }) => {
     const count = todayCounts[name];
+    const cat = EXERCISE_CATEGORIES[category];
     return /*#__PURE__*/React.createElement("button", {
       key: name,
       onClick: () => selectExercise(name),
       className: "exercise-btn"
     }, /*#__PURE__*/React.createElement("span", {
+      className: "exercise-cat-strip",
+      style: {
+        background: cat.color
+      }
+    }), /*#__PURE__*/React.createElement("span", {
+      className: "exercise-btn-body"
+    }, /*#__PURE__*/React.createElement("span", {
       className: "exercise-name"
-    }, name), count > 0 && /*#__PURE__*/React.createElement("span", {
+    }, name), /*#__PURE__*/React.createElement("span", {
+      className: "exercise-cat-label",
+      style: {
+        color: cat.color
+      }
+    }, cat.label)), count > 0 && /*#__PURE__*/React.createElement("span", {
       className: "exercise-count mono"
     }, count));
   }))), todaySets.length > 0 && /*#__PURE__*/React.createElement(Panel, {
@@ -2318,14 +2396,24 @@ function DayView({
     meal: m
   })))), hasStrength && /*#__PURE__*/React.createElement(Panel, {
     title: `Strength · ${data.strength.length} sets`
-  }, Object.entries(strengthByExercise).map(([name, sets]) => /*#__PURE__*/React.createElement("div", {
-    key: name,
-    className: "row"
-  }, /*#__PURE__*/React.createElement("span", {
-    className: "row-key"
-  }, name), /*#__PURE__*/React.createElement("span", {
-    className: "row-val mono"
-  }, sets.length, " ", sets.length === 1 ? "set" : "sets")))), hasCardio && /*#__PURE__*/React.createElement(Panel, {
+  }, Object.entries(strengthByExercise).map(([name, sets]) => {
+    const catKey = categoryFor(name);
+    const cat = catKey ? EXERCISE_CATEGORIES[catKey] : null;
+    return /*#__PURE__*/React.createElement("div", {
+      key: name,
+      className: "row"
+    }, /*#__PURE__*/React.createElement("span", {
+      className: "row-key"
+    }, cat && /*#__PURE__*/React.createElement("span", {
+      className: "cat-dot",
+      style: {
+        background: cat.color
+      },
+      "aria-label": cat.label
+    }), name), /*#__PURE__*/React.createElement("span", {
+      className: "row-val mono"
+    }, sets.length, " ", sets.length === 1 ? "set" : "sets"));
+  })), hasCardio && /*#__PURE__*/React.createElement(Panel, {
     title: `Cardio · ${cardioBurn.toLocaleString()} kcal`
   }, [...data.cardio].sort((a, b) => b.started_at.localeCompare(a.started_at)).map(s => {
     var _CARDIO_TYPES$find2;
@@ -3824,7 +3912,7 @@ function App() {
           gap: 8px;
         }
         .exercise-btn {
-          padding: 11px 12px;
+          padding: 0;
           background: var(--bg);
           border: 1px solid var(--ink);
           font-family: inherit;
@@ -3834,14 +3922,42 @@ function App() {
           text-align: left;
           transition: background-color 140ms, color 140ms;
           display: flex;
-          align-items: center;
-          justify-content: space-between;
-          gap: 6px;
+          align-items: stretch;
           line-height: 1.25;
+          overflow: hidden;
         }
         .exercise-btn:hover {
           background: var(--accent);
           color: var(--accent-text);
+        }
+        /* The category strip is intentionally not transitioned —
+           on hover the button bg flips to persimmon, and we want
+           the strip's true category colour to remain visible so the
+           categorisation isn't lost mid-hover. */
+        .exercise-cat-strip {
+          flex: 0 0 4px;
+          align-self: stretch;
+        }
+        .exercise-btn-body {
+          flex: 1;
+          min-width: 0;
+          padding: 9px 11px;
+          display: flex;
+          flex-direction: column;
+          gap: 2px;
+        }
+        .exercise-cat-label {
+          font-size: 9px;
+          letter-spacing: 0.16em;
+          text-transform: uppercase;
+          font-weight: 700;
+          line-height: 1;
+        }
+        /* Hover: invert the category label so it stays legible against
+           the persimmon background. */
+        .exercise-btn:hover .exercise-cat-label {
+          color: var(--accent-text) !important;
+          opacity: 0.85;
         }
         .exercise-name {
           flex: 1;
@@ -3854,6 +3970,8 @@ function App() {
           color: var(--accent-text);
           font-weight: 700;
           flex-shrink: 0;
+          align-self: center;
+          margin-right: 8px;
         }
         .exercise-btn:hover .exercise-count {
           background: var(--accent-text);
@@ -3865,6 +3983,15 @@ function App() {
           padding-bottom: 10px;
           margin-bottom: 10px;
           border-bottom: 1px dashed var(--line-dashed);
+        }
+
+        /* Category dot for day-view summary list. */
+        .cat-dot {
+          display: inline-block;
+          width: 8px;
+          height: 8px;
+          border-radius: 50%;
+          flex-shrink: 0;
         }
 
         /* Sets table */
@@ -4474,6 +4601,5 @@ const _root = ReactDOM.createRoot(document.getElementById("root"));
 _root.render(/*#__PURE__*/React.createElement(App, null));
 
 </script>
-
 </body>
 </html>
