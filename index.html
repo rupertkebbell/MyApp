@@ -488,19 +488,19 @@ function genId() {
 const EXERCISE_CATEGORIES = {
   push: {
     label: "Push",
-    color: "#C9542A"
+    color: "#D67452"
   },
   pull: {
     label: "Pull",
-    color: "#5C4A33"
+    color: "#7A6650"
   },
   legs: {
     label: "Legs",
-    color: "#6B7548"
+    color: "#8A9466"
   },
   core: {
     label: "Core",
-    color: "#B5832A"
+    color: "#CFA254"
   }
 };
 const EXERCISES = [{
@@ -1664,6 +1664,18 @@ function StrengthMode({
     todayCounts[s.exercise_name] = (todayCounts[s.exercise_name] || 0) + 1;
   }
   const todayByExercise = groupByExercise(todaySets);
+
+  // Set of exercise names trained in the last 7 days, used to decorate
+  // buttons with a green tick. Includes today's logged sets even if the
+  // exercise_dict hasn't yet been written (newly logged exercises).
+  const sevenDaysAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
+  const recentExercises = new Set();
+  for (const [name, info] of Object.entries(exerciseDict)) {
+    if (info !== null && info !== void 0 && info.last_used_at && Date.parse(info.last_used_at) >= sevenDaysAgo) {
+      recentExercises.add(name);
+    }
+  }
+  for (const s of todaySets) recentExercises.add(s.exercise_name);
   return /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement(Panel, {
     title: "Pick an exercise"
   }, /*#__PURE__*/React.createElement("div", {
@@ -1674,25 +1686,27 @@ function StrengthMode({
   }) => {
     const count = todayCounts[name];
     const cat = EXERCISE_CATEGORIES[category];
+    const recent = recentExercises.has(name);
     return /*#__PURE__*/React.createElement("button", {
       key: name,
       onClick: () => selectExercise(name),
-      className: "exercise-btn"
-    }, /*#__PURE__*/React.createElement("span", {
-      className: "exercise-cat-strip",
+      className: `exercise-btn cat-${category}`,
       style: {
         background: cat.color
       }
-    }), /*#__PURE__*/React.createElement("span", {
+    }, /*#__PURE__*/React.createElement("span", {
       className: "exercise-btn-body"
     }, /*#__PURE__*/React.createElement("span", {
       className: "exercise-name"
     }, name), /*#__PURE__*/React.createElement("span", {
-      className: "exercise-cat-label",
-      style: {
-        color: cat.color
-      }
-    }, cat.label)), count > 0 && /*#__PURE__*/React.createElement("span", {
+      className: "exercise-cat-label"
+    }, cat.label)), recent && /*#__PURE__*/React.createElement("span", {
+      className: "exercise-tick",
+      "aria-label": "Trained in the last 7 days"
+    }, /*#__PURE__*/React.createElement(Check, {
+      size: 12,
+      strokeWidth: 3
+    })), count > 0 && /*#__PURE__*/React.createElement("span", {
       className: "exercise-count mono"
     }, count));
   }))), todaySets.length > 0 && /*#__PURE__*/React.createElement(Panel, {
@@ -3991,7 +4005,7 @@ function App() {
           color: var(--accent-text);
         }
 
-        /* Exercise list */
+        /* Exercise list — whole button is the category colour. */
         .exercise-grid {
           display: grid;
           grid-template-columns: 1fr 1fr;
@@ -3999,38 +4013,39 @@ function App() {
         }
         .exercise-btn {
           padding: 0;
-          background: var(--bg);
+          /* background colour is set inline per category. */
           border: 1px solid var(--ink);
           font-family: inherit;
           font-weight: 700;
           font-size: 13px;
-          color: var(--ink);
+          color: white;
           text-align: left;
-          transition: background-color 140ms, color 140ms;
+          transition: filter 140ms;
           display: flex;
           align-items: stretch;
           line-height: 1.25;
           overflow: hidden;
+          position: relative;
         }
         .exercise-btn:hover {
-          background: var(--accent);
-          color: var(--accent-text);
+          filter: brightness(0.94);
         }
-        /* The category strip is intentionally not transitioned —
-           on hover the button bg flips to persimmon, and we want
-           the strip's true category colour to remain visible so the
-           categorisation isn't lost mid-hover. */
-        .exercise-cat-strip {
-          flex: 0 0 4px;
-          align-self: stretch;
+        .exercise-btn:active {
+          filter: brightness(0.88);
         }
         .exercise-btn-body {
           flex: 1;
           min-width: 0;
           padding: 9px 11px;
+          padding-right: 36px; /* Reserve space for tick / count badge. */
           display: flex;
           flex-direction: column;
           gap: 2px;
+        }
+        .exercise-name {
+          color: white;
+          flex: 1;
+          min-width: 0;
         }
         .exercise-cat-label {
           font-size: 9px;
@@ -4038,30 +4053,36 @@ function App() {
           text-transform: uppercase;
           font-weight: 700;
           line-height: 1;
+          color: rgba(255, 255, 255, 0.85);
         }
-        /* Hover: invert the category label so it stays legible against
-           the persimmon background. */
-        .exercise-btn:hover .exercise-cat-label {
-          color: var(--accent-text) !important;
-          opacity: 0.85;
+
+        /* Green tick — shown for exercises trained in last 7 days. */
+        .exercise-tick {
+          position: absolute;
+          top: 8px;
+          right: 8px;
+          width: 18px;
+          height: 18px;
+          border-radius: 50%;
+          background: #5A8B3A;
+          border: 1px solid var(--ink);
+          color: white;
+          display: flex;
+          align-items: center;
+          justify-content: center;
         }
-        .exercise-name {
-          flex: 1;
-          min-width: 0;
-        }
+        /* Count badge — shown when sets logged today. Sits below the tick
+           if both are present (unusual: counts only show after first set,
+           which also means recent=true). */
         .exercise-count {
+          position: absolute;
+          bottom: 8px;
+          right: 8px;
           font-size: 11px;
-          padding: 2px 6px;
-          background: var(--accent);
-          color: var(--accent-text);
+          padding: 1px 6px;
+          background: rgba(0, 0, 0, 0.35);
+          color: white;
           font-weight: 700;
-          flex-shrink: 0;
-          align-self: center;
-          margin-right: 8px;
-        }
-        .exercise-btn:hover .exercise-count {
-          background: var(--accent-text);
-          color: var(--accent);
         }
         .exercise-meta {
           font-size: 11.5px;
