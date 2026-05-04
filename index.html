@@ -504,23 +504,29 @@ const EXERCISE_CATEGORIES = {
   }
 };
 const EXERCISES = [{
-  name: "Squat",
-  category: "legs"
-}, {
   name: "Bench press",
   category: "push"
 }, {
-  name: "Barbell row",
-  category: "pull"
+  name: "Overhead press",
+  category: "push"
+}, {
+  name: "Shoulder press",
+  category: "push"
+}, {
+  name: "Lat raises",
+  category: "push"
 }, {
   name: "Pull-ups",
   category: "pull"
 }, {
-  name: "Deadlift",
-  category: "legs"
+  name: "Barbell row",
+  category: "pull"
 }, {
-  name: "Overhead press",
-  category: "push"
+  name: "Lat pulldown",
+  category: "pull"
+}, {
+  name: "Cable row",
+  category: "pull"
 }, {
   name: "Machine crunches",
   category: "core"
@@ -528,17 +534,14 @@ const EXERCISES = [{
   name: "Hanging leg raises",
   category: "core"
 }, {
-  name: "Lat pulldown",
-  category: "pull"
+  name: "Squat",
+  category: "legs"
 }, {
-  name: "Shoulder press",
-  category: "push"
+  name: "Deadlift",
+  category: "legs"
 }, {
   name: "Leg extensions",
   category: "legs"
-}, {
-  name: "Lat raises",
-  category: "push"
 }];
 
 // Map name → category for fast lookup when rendering existing logged sets
@@ -1411,6 +1414,89 @@ function SegmentControl({
     className: `segment-btn ${value === opt.id ? "active" : ""}`
   }, opt.label)));
 }
+
+// Set/Rest stopwatch — persistent across re-renders within the
+// strength view, but resets on page reload (intentional: writing
+// every second to localStorage would be wasteful, and the timer is
+// only useful within a single workout session).
+//
+// The mode auto-toggles: tap REST while in SET → records the set
+// duration as `lastInterval` and starts the rest clock from 0.
+// Same in reverse.
+function SetRestTimer() {
+  // Mode: "idle" | "set" | "rest"
+  const [mode, setMode] = useState("idle");
+  // Wall-clock ms when the current interval started; null when idle.
+  const [startedAt, setStartedAt] = useState(null);
+  // Tick state — bumped every second to force re-render of the time.
+  const [, setTick] = useState(0);
+  // The duration of the previously-completed interval (in seconds).
+  // Shown as "LAST SET 0:42" in the corner. Null until first transition.
+  const [lastInterval, setLastInterval] = useState(null);
+  const [lastIntervalMode, setLastIntervalMode] = useState(null);
+
+  // 1Hz tick — only runs when timer is active.
+  useEffect(() => {
+    if (mode === "idle") return;
+    const id = setInterval(() => setTick(t => t + 1), 1000);
+    return () => clearInterval(id);
+  }, [mode]);
+  function elapsed() {
+    if (startedAt == null) return 0;
+    return Math.floor((Date.now() - startedAt) / 1000);
+  }
+  function format(secs) {
+    const m = Math.floor(secs / 60);
+    const s = secs % 60;
+    return `${m}:${String(s).padStart(2, "0")}`;
+  }
+  function switchTo(next) {
+    // If already in this mode, ignore (avoid resetting on accidental tap).
+    if (mode === next) return;
+    // Save the elapsed interval before resetting, but only when
+    // transitioning *between* set and rest (not from idle).
+    if (mode !== "idle") {
+      setLastInterval(elapsed());
+      setLastIntervalMode(mode);
+    }
+    setStartedAt(Date.now());
+    setMode(next);
+  }
+  function reset() {
+    setMode("idle");
+    setStartedAt(null);
+    setLastInterval(null);
+    setLastIntervalMode(null);
+  }
+  const headerSuffix = mode === "idle" ? "" : ` · ${mode.toUpperCase()}`;
+  const displaySecs = mode === "idle" ? 0 : elapsed();
+  return /*#__PURE__*/React.createElement(Panel, {
+    title: `Timer${headerSuffix}`
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "timer-row"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "timer-time-block"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "timer-time mono"
+  }, format(displaySecs)), mode === "idle" && /*#__PURE__*/React.createElement("div", {
+    className: "timer-sublabel"
+  }, "IDLE"), mode !== "idle" && lastInterval != null && /*#__PURE__*/React.createElement("div", {
+    className: "timer-sublabel"
+  }, "LAST ", lastIntervalMode.toUpperCase(), " ", format(lastInterval))), /*#__PURE__*/React.createElement("div", {
+    className: "timer-modes"
+  }, /*#__PURE__*/React.createElement("button", {
+    className: `timer-mode-btn ${mode === "set" ? "active" : ""}`,
+    onClick: () => switchTo("set")
+  }, "Set"), /*#__PURE__*/React.createElement("button", {
+    className: `timer-mode-btn ${mode === "rest" ? "active" : ""}`,
+    onClick: () => switchTo("rest")
+  }, "Rest"))), mode !== "idle" && /*#__PURE__*/React.createElement("div", {
+    className: "timer-reset-row"
+  }, /*#__PURE__*/React.createElement("button", {
+    className: "timer-reset-btn",
+    onClick: reset
+  }, "Reset")));
+}
 function StrengthMode({
   date,
   onChange
@@ -1511,7 +1597,7 @@ function StrengthMode({
   if (selected) {
     var _exerciseDict$selecte;
     const lastUsed = (_exerciseDict$selecte = exerciseDict[selected]) === null || _exerciseDict$selecte === void 0 ? void 0 : _exerciseDict$selecte.last_used_at;
-    return /*#__PURE__*/React.createElement(Panel, {
+    return /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement(Panel, {
       title: selected
     }, lastUsed && /*#__PURE__*/React.createElement("div", {
       className: "exercise-meta"
@@ -1569,7 +1655,7 @@ function StrengthMode({
     }, "Back"), /*#__PURE__*/React.createElement(Button, {
       onClick: logExercise,
       disabled: logging || sets.every(s => !Number(s.reps))
-    }, logging ? "Logging…" : "Log")));
+    }, logging ? "Logging…" : "Log"))), /*#__PURE__*/React.createElement(SetRestTimer, null));
   }
 
   // === List view: pick an exercise ===
@@ -1615,7 +1701,7 @@ function StrengthMode({
     key: name,
     name: name,
     sets: sets
-  }))));
+  }))), /*#__PURE__*/React.createElement(SetRestTimer, null));
 }
 function CardioMode({
   date,
@@ -3992,6 +4078,77 @@ function App() {
           height: 8px;
           border-radius: 50%;
           flex-shrink: 0;
+        }
+
+        /* Set/Rest timer. */
+        .timer-row {
+          display: flex;
+          align-items: center;
+          gap: 14px;
+        }
+        .timer-time-block {
+          flex: 1;
+          min-width: 0;
+        }
+        .timer-time {
+          font-size: 36px;
+          font-weight: 700;
+          letter-spacing: -0.02em;
+          line-height: 1;
+        }
+        .timer-sublabel {
+          font-size: 9.5px;
+          letter-spacing: 0.16em;
+          font-weight: 700;
+          color: var(--ink-faint);
+          margin-top: 4px;
+          font-family: 'JetBrains Mono', ui-monospace, monospace;
+        }
+        .timer-modes {
+          display: flex;
+          flex: 0 0 auto;
+        }
+        .timer-mode-btn {
+          padding: 12px 20px;
+          font-family: inherit;
+          font-weight: 700;
+          font-size: 12px;
+          letter-spacing: 0.14em;
+          text-transform: uppercase;
+          color: var(--ink-soft);
+          background: var(--bg);
+          border: 1px solid var(--ink);
+          border-right: none;
+          transition: background-color 140ms, color 140ms;
+        }
+        .timer-mode-btn:last-child {
+          border-right: 1px solid var(--ink);
+        }
+        .timer-mode-btn:hover { background: var(--bg-hover); color: var(--ink); }
+        .timer-mode-btn.active {
+          background: var(--accent);
+          color: var(--accent-text);
+        }
+        .timer-reset-row {
+          display: flex;
+          justify-content: flex-end;
+          margin-top: 10px;
+        }
+        .timer-reset-btn {
+          padding: 4px 10px;
+          font-family: inherit;
+          font-size: 10px;
+          letter-spacing: 0.14em;
+          text-transform: uppercase;
+          font-weight: 700;
+          color: var(--ink-faint);
+          background: transparent;
+          border: 1px solid var(--line-dashed);
+          transition: color 140ms, border-color 140ms;
+        }
+        .timer-reset-btn:hover {
+          color: var(--ink);
+          border-color: var(--ink);
         }
 
         /* Sets table */
